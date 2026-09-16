@@ -39,7 +39,8 @@ header nav[aria-expanded='true'] {
 
 @media (min-width: 900px) {
   header .nav-wrapper {
-    position: relative;
+    position: sticky;
+    top: 0;
   }
 
   header nav {
@@ -150,10 +151,26 @@ header nav .nav-brand {
 
 header nav .nav-brand a {
   grid-area: brand;
+  display: inline-flex;
+  align-items: baseline;
   flex-basis: 128px;
   font: var(--type-headline-1-font);
-  letter-spacing: var(--type-headline-1-letter-spacing);
-  font-weight: bold;
+  letter-spacing: 0.01em;
+  font-weight: 800;
+  text-transform: lowercase;
+  color: var(--color-blue-500);
+}
+
+/* decorative accent dot on the typographic wordmark (text-only brand slot) */
+header nav .nav-brand a:not(:has(img))::after {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-inline-start: 0.15em;
+  align-self: flex-start;
+  border-radius: 50%;
+  background-color: var(--color-coral-500);
 }
 
 li.nav-drop img {
@@ -163,9 +180,15 @@ li.nav-drop img {
   object-fit: contain;
 }
 
+header nav .nav-brand a:has(img) {
+  align-items: center;
+  flex-basis: auto;
+}
+
 header nav .nav-brand img {
-  width: 128px;
-  height: auto;
+  height: 40px;
+  width: auto;
+  max-width: 200px;
 }
 
 /* sections */
@@ -337,7 +360,7 @@ header nav .nav-tools {
 }
 
 header nav .nav-tools-wrapper>button {
-  color: var(--color-brand-700);
+  color: var(--color-blue-500);
   background: transparent;
   padding: 10px;
   border: unset;
@@ -346,10 +369,29 @@ header nav .nav-tools-wrapper>button {
   width: 40px;
 }
 
+header nav .nav-tools-wrapper>button:focus-visible {
+  outline: var(--shape-border-width-3) solid var(--color-blue-500);
+  outline-offset: 2px;
+}
+
+/*
+ * The nav icons are flat, single-color SVGs referenced as background images.
+ * currentColor inside an externally-referenced SVG does not inherit the
+ * button's CSS color, so we use them as a mask and paint the fill with
+ * background-color instead - this lets the icons follow the brand palette.
+ */
+header nav .nav-tools button.nav-cart-button,
+header nav .nav-tools button.nav-wishlist-button,
+header nav .nav-tools button.nav-search-button {
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 22px;
+  background-color: var(--color-blue-500);
+}
+
 header nav .nav-tools button.nav-cart-button {
-  background-image: url('../../icons/cart.svg');
-  background-repeat: no-repeat;
-  background-position: center;
+  mask-image: url('../../icons/cart.svg');
+  background-color: var(--color-brand-500);
   position: relative;
 }
 
@@ -382,17 +424,13 @@ header nav .nav-tools .nav-cart-status {
 }
 
 header nav .nav-tools button.nav-wishlist-button {
-  background-image: url('../../icons/heart.svg');
-  background-repeat: no-repeat;
-  background-position: center;
+  mask-image: url('../../icons/heart.svg');
   position: relative;
 }
 
 header nav .nav-tools button.nav-search-button {
   font-size: 0;
-  background-image: url('../../icons/search.svg');
-  background-repeat: no-repeat;
-  background-position: center;
+  mask-image: url('../../icons/search.svg');
 }
 
 header .nav-search-panel {
@@ -812,7 +850,7 @@ body:has(.seller-assisted-buying-banner) {
   height: var(--spacing-xxbig);
   padding: var(--spacing-xsmall) var(--spacing-big);
   font: var(--type-body-1-default-font);
-  background-color: var(--color-brand-300);
+  background-color: var(--color-brand-700);
   color: var(--color-neutral-50);
   display: flex;
   justify-content: space-between;
@@ -849,18 +887,18 @@ body:has(.seller-assisted-buying-banner) {
 
 .seller-assisted-buying-banner__close-button:hover {
   background-color: var(--color-neutral-50);
-  color: var(--color-brand-300);
+  color: var(--color-brand-700);
 }
 
 .seller-assisted-buying-banner__close-button:active {
   background-color: var(--color-neutral-50);
-  color: var(--color-brand-300);
+  color: var(--color-brand-700);
 }
 
 .seller-assisted-buying-banner__close-button:disabled {
   opacity: 0.6;
   background-color: var(--color-neutral-50);
-  color: var(--color-brand-300);
+  color: var(--color-brand-700);
   cursor: not-allowed;
 }
 
