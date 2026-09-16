@@ -30,6 +30,83 @@ const setCustomerGroupHeader = (customerGroupId) => {
   CS_FETCH_GRAPHQL.setFetchGraphQlHeader('Magento-Customer-Group', customerGroupId);
 };
 
+/*
+ * Catalog Service identifies a B2B customer group by the SHA-1 hash of its numeric id
+ * (the "customer group code", e.g. group 1 -> 356a192b...). The auth drop-in only
+ * resolves customer.group.uid when Adobe Commerce Optimizer is enabled; on the plain
+ * customer-group / shared-catalog path (adobe-commerce-optimizer: false) it always
+ * emits the default group code, so shared-catalog product visibility and pricing never
+ * resolve for logged-in customers. The helpers below resolve the real group after
+ * authentication and set the Magento-Customer-Group header Catalog Service expects.
+ */
+const DEFAULT_CUSTOMER_GROUP_CODE = 'b6589fc6ab0dc82cf12099d1c2d40ab994e8410c'; // SHA-1("0")
+const CUSTOMER_GROUP_CACHE_KEY = 'DROPINS_CUSTOMER_GROUP';
+
+const toCustomerGroupCode = async (uid) => {
+  if (!uid) return '';
+  try {
+    const binary = atob(uid);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const digest = await crypto.subtle.digest('SHA-1', bytes);
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+  } catch (e) {
+    console.error('Failed to derive customer group code', e);
+    return '';
+  }
+};
+
+// Set the header synchronously at startup (from cache, or the default group) so the
+// first Catalog Service query never falls back to the unscoped base catalog.
+const applyInitialCustomerGroup = () => {
+  const token = getUserTokenCookie();
+  if (!token) {
+    setCustomerGroupHeader(DEFAULT_CUSTOMER_GROUP_CODE);
+    return;
+  }
+  let code = DEFAULT_CUSTOMER_GROUP_CODE;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(CUSTOMER_GROUP_CACHE_KEY) || 'null');
+    if (cached && cached.token === token && cached.code) code = cached.code;
+  } catch (e) {
+    /* ignore malformed cache */
+  }
+  setCustomerGroupHeader(code);
+};
+
+// Resolve the authenticated customer's real group and set the Catalog Service header.
+const resolveCustomerGroup = async (isAuthenticated) => {
+  const token = getUserTokenCookie();
+  if (!isAuthenticated || !token) {
+    setCustomerGroupHeader(DEFAULT_CUSTOMER_GROUP_CODE);
+    try {
+      sessionStorage.removeItem(CUSTOMER_GROUP_CACHE_KEY);
+    } catch (e) {
+      /* ignore */
+    }
+    return;
+  }
+  try {
+    // Ensure the auth token is present regardless of listener ordering.
+    CORE_FETCH_GRAPHQL.setFetchGraphQlHeader('Authorization', `Bearer ${token}`);
+    const { data } = await CORE_FETCH_GRAPHQL.fetchGraphQl(
+      'query RESOLVE_CUSTOMER_GROUP { customer { group { uid } } }',
+    );
+    const code = await toCustomerGroupCode(data?.customer?.group?.uid);
+    if (code) {
+      setCustomerGroupHeader(code);
+      try {
+        sessionStorage.setItem(CUSTOMER_GROUP_CACHE_KEY, JSON.stringify({ token, code }));
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  } catch (e) {
+    console.error('Failed to resolve customer group for Catalog Service', e);
+  }
+};
+
 const setAdobeCommerceOptimizerHeader = (adobeCommerceOptimizer) => {
   if (adobeCommerceOptimizer?.priceBookId) {
     CS_FETCH_GRAPHQL.setFetchGraphQlHeader('AC-Price-Book-ID', adobeCommerceOptimizer.priceBookId);
@@ -66,7 +143,11 @@ export default async function initializeDropins() {
     if (getConfigValue('adobe-commerce-optimizer')) {
       events.on('auth/adobe-commerce-optimizer', setAdobeCommerceOptimizerHeader, { eager: true });
     } else {
-      events.on('auth/group-uid', setCustomerGroupHeader, { eager: true });
+      // The auth drop-in only emits the default group code on this path, so resolve
+      // the real customer group ourselves: apply a synchronous default/cached code
+      // now, then refresh from the customer query whenever auth state changes.
+      applyInitialCustomerGroup();
+      events.on('authenticated', resolveCustomerGroup, { eager: true });
     }
 
     // Clear cart state when switching between websites to avoid stale cart IDs
