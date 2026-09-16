@@ -18,6 +18,9 @@ footer .footer p {
 footer .footer img {
     height: 44px;
     width: auto;
+
+    /* reserve width so the logo SVG can't shift the footer on load */
+    aspect-ratio: 327 / 67;
 }
 
 footer .footer a:not(.button) {

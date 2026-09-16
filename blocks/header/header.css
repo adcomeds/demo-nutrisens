@@ -188,6 +188,9 @@ header nav .nav-brand a:has(img) {
 header nav .nav-brand img {
   height: 40px;
   width: auto;
+
+  /* reserve width so the (externally hosted) logo can't shift the nav on load */
+  aspect-ratio: 2048 / 666;
   max-width: 200px;
 }
 
