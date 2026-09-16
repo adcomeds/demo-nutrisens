@@ -1,10 +1,13 @@
 .columns > div {
   display: flex;
   flex-direction: column;
+  gap: var(--spacing-medium);
 }
 
 .columns img {
+  display: block;
   width: 100%;
+  border-radius: var(--shape-border-radius-2);
 }
 
 .columns > div > div {
@@ -15,19 +18,35 @@
   order: 0;
 }
 
-.columns > div > .columns-img-col img {
-  display: block;
+.columns h2,
+.columns h3,
+.columns h4 {
+  margin-top: 0;
+  color: var(--color-blue-500);
+}
+
+@media (min-width: 600px) {
+  .columns > div {
+    gap: var(--spacing-big);
+  }
 }
 
 @media (min-width: 900px) {
   .columns > div {
     align-items: center;
     flex-direction: unset;
-    gap: 24px;
+    gap: var(--spacing-xbig);
   }
 
   .columns > div > div {
     flex: 1;
+    min-width: 0;
     order: unset;
+  }
+}
+
+@media (min-width: 1200px) {
+  .columns > div {
+    gap: var(--spacing-xxbig);
   }
 }

@@ -1,22 +1,60 @@
 footer {
-    background-color: var(--color-neutral-100);
+    background-color: var(--color-blue-700);
     font: var(--type-body-2-default-font);
     letter-spacing: var(--type-body-2-default-letter-spacing);
+    color: var(--color-neutral-100);
 }
 
 footer .footer > div {
     margin: auto;
     max-width: 1200px;
-    padding: 40px 24px 24px;
+    padding: var(--spacing-xbig) 24px var(--spacing-medium);
 }
 
 footer .footer p {
     margin: 0;
 }
 
+footer .footer img {
+    height: 44px;
+    width: auto;
+
+    /* reserve width so the logo SVG can't shift the footer on load */
+    aspect-ratio: 327 / 67;
+}
+
+footer .footer a:not(.button) {
+    color: var(--color-neutral-50);
+}
+
+footer .footer a:not(.button):hover {
+    color: var(--color-amber-500);
+}
+
+footer .footer h1,
+footer .footer h2,
+footer .footer h3,
+footer .footer h4,
+footer .footer h5,
+footer .footer h6 {
+    font: var(--type-headline-2-strong-font);
+    letter-spacing: var(--type-headline-2-strong-letter-spacing);
+    color: var(--color-neutral-50);
+}
+
+footer .footer hr {
+    border-bottom: var(--shape-border-width-1) solid var(--color-blue-500);
+}
+
+/* link columns (authored as a columns block) align to the top, not centered */
+footer .footer .columns > div {
+    align-items: flex-start;
+}
+
 .storeview-switcher-button {
     background: transparent;
     padding-left: 0;
+    color: inherit;
 }
 
 .storeview-modal-storeview-title {
@@ -52,6 +90,15 @@ footer .footer p {
     display: none;
 }
 
+footer .footer ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xsmall);
+}
+
 .storeview-multiple-stores[aria-expanded="true"] {
     list-style-image: url("../../icons/chevron-down.svg");
 }
@@ -68,6 +115,6 @@ footer .footer p {
 
 @media (min-width: 900px) {
     footer .footer > div {
-        padding: 40px 32px 24px;
+        padding: var(--spacing-xxbig) 32px var(--spacing-medium);
     }
 }
