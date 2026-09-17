@@ -41,7 +41,18 @@ function ensureProductShape(product) {
   if (amt != null && typeof amt === 'object' && 'value' in amt) {
     // Already in GraphQL shape; no change
   } else if (amt != null && typeof amt === 'number') {
-    price = { final: { amount: { value: amt, currency: priceFinal?.currency ?? '' } } };
+    const priceRegular = price?.regular;
+    price = {
+      final: { amount: { value: amt, currency: priceFinal?.currency ?? '' } },
+      ...(priceRegular?.amount != null && {
+        regular: {
+          amount: {
+            value: priceRegular.amount,
+            currency: priceRegular.currency ?? priceFinal?.currency ?? '',
+          },
+        },
+      }),
+    };
   } else if (product.prices?.final != null) {
     const { final: pf, regular: pr } = product.prices;
     const regularAmount = pr != null
@@ -100,10 +111,10 @@ export const enrichConfigurableProducts = async (items) => {
       try {
         const configured = await pdpGetRefinedProduct(product.sku, optionIds);
         if (!configured) return item;
-        const images = Array.isArray(configured.images)
-          ? configured.images.map((img) => ({ url: img?.url ?? '' }))
-          : [];
-        return { ...item, configured_product: { ...configured, images } };
+        // getRefinedProduct returns price.{regular,final}.amount as a bare number,
+        // but the requisition-list renderer reads amount.value. Normalize the
+        // resolved variant the same way simple products are, or its price renders 0.
+        return { ...item, configured_product: ensureProductShape(configured) };
       } catch {
         return item;
       }
