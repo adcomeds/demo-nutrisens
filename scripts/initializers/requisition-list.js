@@ -41,14 +41,29 @@ function ensureProductShape(product) {
   if (amt != null && typeof amt === 'object' && 'value' in amt) {
     // Already in GraphQL shape; no change
   } else if (amt != null && typeof amt === 'number') {
-    price = { final: { amount: { value: amt, currency: priceFinal?.currency ?? '' } } };
+    const priceRegular = price?.regular;
+    price = {
+      final: { amount: { value: amt, currency: priceFinal?.currency ?? '' } },
+      ...(priceRegular?.amount != null && {
+        regular: {
+          amount: {
+            value: priceRegular.amount,
+            currency: priceRegular.currency ?? priceFinal?.currency ?? '',
+          },
+        },
+      }),
+    };
   } else if (product.prices?.final != null) {
     const { final: pf, regular: pr } = product.prices;
-    const regularAmount = pr != null
-      ? { amount: { value: pr.amount ?? 0, currency: pr.currency ?? '' } }
+    // Catalog Service returns a single price as `amount`, or a range (an
+    // unresolved configurable) as `minimumAmount`/`maximumAmount`.
+    const finalValue = pf.amount ?? pf.minimumAmount ?? 0;
+    const regularValue = pr != null ? (pr.amount ?? pr.minimumAmount) : undefined;
+    const regularAmount = regularValue != null
+      ? { amount: { value: regularValue, currency: pr.currency ?? pf.currency ?? '' } }
       : undefined;
     price = {
-      final: { amount: { value: pf.amount ?? 0, currency: pf.currency ?? '' } },
+      final: { amount: { value: finalValue, currency: pf.currency ?? '' } },
       regular: regularAmount,
     };
   } else if (product.priceRange?.minimum?.final?.amount != null) {
@@ -90,20 +105,26 @@ export const enrichConfigurableProducts = async (items) => {
   if (!items?.length) return items;
   return Promise.all(
     items.map(async (item) => {
-      const { product, configurable_options: opts } = item;
-      if (!product?.sku || !opts?.length) return item;
-      const optionIds = opts.map((o) => {
-        const optionUid = o.option_uid ?? o.configurable_product_option_uid;
-        const valueUid = o.value_uid ?? o.configurable_product_option_value_uid;
-        return btoa(`configurable/${atob(optionUid)}/${atob(valueUid)}`);
-      });
+      const { product, configurable_options: opts, sku: itemSku } = item;
+      // The requisition-list item carries the configurable parent sku at the item
+      // level (item.sku) — the drop-in keys everything off it. product.sku is not
+      // populated for configurable items, so reading it skipped enrichment entirely.
+      const sku = itemSku ?? product?.sku;
+      if (!sku || !opts?.length) return item;
+      // The selected value UID is already the Catalog Service option id
+      // (base64 of `configurable/<attr>/<value>`), so pass it through as-is.
+      // Re-wrapping it produced a bogus nested id, so refineProduct could not
+      // match the variant and returned the parent's price *range* instead.
+      const optionIds = opts
+        .map((o) => o.value_uid ?? o.configurable_product_option_value_uid)
+        .filter(Boolean);
       try {
-        const configured = await pdpGetRefinedProduct(product.sku, optionIds);
+        const configured = await pdpGetRefinedProduct(sku, optionIds);
         if (!configured) return item;
-        const images = Array.isArray(configured.images)
-          ? configured.images.map((img) => ({ url: img?.url ?? '' }))
-          : [];
-        return { ...item, configured_product: { ...configured, images } };
+        // getRefinedProduct returns price.{regular,final}.amount as a bare number,
+        // but the requisition-list renderer reads amount.value. Normalize the
+        // resolved variant the same way simple products are, or its price renders 0.
+        return { ...item, configured_product: ensureProductShape(configured) };
       } catch {
         return item;
       }
