@@ -103,20 +103,14 @@ export const getProductData = async (skus) => {
  */
 export const enrichConfigurableProducts = async (items) => {
   if (!items?.length) return items;
-  const __diag = []; // TEMP DIAGNOSTIC
-  const out = await Promise.all(
+  return Promise.all(
     items.map(async (item) => {
       const { product, configurable_options: opts, sku: itemSku } = item;
       // The requisition-list item carries the configurable parent sku at the item
       // level (item.sku) — the drop-in keys everything off it. product.sku is not
       // populated for configurable items, so reading it skipped enrichment entirely.
       const sku = itemSku ?? product?.sku;
-      if (!sku || !opts?.length) {
-        __diag.push({
-          itemSku, productSku: product?.sku, opts: opts?.length ?? 0, skipped: true,
-        });
-        return item;
-      }
+      if (!sku || !opts?.length) return item;
       // The selected value UID is already the Catalog Service option id
       // (base64 of `configurable/<attr>/<value>`), so pass it through as-is.
       // Re-wrapping it produced a bogus nested id, so refineProduct could not
@@ -126,39 +120,16 @@ export const enrichConfigurableProducts = async (items) => {
         .filter(Boolean);
       try {
         const configured = await pdpGetRefinedProduct(sku, optionIds);
-        const shaped = configured ? ensureProductShape(configured) : null;
-        __diag.push({
-          sku,
-          rawOptions: opts,
-          optionIds,
-          gotConfigured: !!configured,
-          configuredKeys: configured ? Object.keys(configured) : null,
-          rawPrice: configured?.price ?? null,
-          rawPrices: configured?.prices ?? null,
-          rawPriceRange: configured?.priceRange ?? null,
-          shapedPrice: shaped?.price ?? null,
-          parentProductPrice: product?.price ?? null,
-        });
         if (!configured) return item;
         // getRefinedProduct returns price.{regular,final}.amount as a bare number,
         // but the requisition-list renderer reads amount.value. Normalize the
         // resolved variant the same way simple products are, or its price renders 0.
-        return { ...item, configured_product: shaped };
-      } catch (e) {
-        __diag.push({ sku, refineError: String(e) });
+        return { ...item, configured_product: ensureProductShape(configured) };
+      } catch {
         return item;
       }
     }),
   );
-  // TEMP DIAGNOSTIC — render on page so it can be screenshotted
-  try {
-    window.__RL_ENRICH_DIAG = __diag;
-    const bar = document.createElement('div');
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a0026;color:#fff;font:11px/1.4 monospace;padding:12px;white-space:pre-wrap;max-height:70vh;overflow:auto';
-    bar.textContent = `RL ENRICH DIAG (${__diag.length} items) — screenshot me:\n${JSON.stringify(__diag, null, 2)}`;
-    document.body.prepend(bar);
-  } catch (e) { /* ignore */ }
-  return out;
 };
 
 /**
