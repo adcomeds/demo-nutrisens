@@ -55,11 +55,15 @@ function ensureProductShape(product) {
     };
   } else if (product.prices?.final != null) {
     const { final: pf, regular: pr } = product.prices;
-    const regularAmount = pr != null
-      ? { amount: { value: pr.amount ?? 0, currency: pr.currency ?? '' } }
+    // Catalog Service returns a single price as `amount`, or a range (an
+    // unresolved configurable) as `minimumAmount`/`maximumAmount`.
+    const finalValue = pf.amount ?? pf.minimumAmount ?? 0;
+    const regularValue = pr != null ? (pr.amount ?? pr.minimumAmount) : undefined;
+    const regularAmount = regularValue != null
+      ? { amount: { value: regularValue, currency: pr.currency ?? pf.currency ?? '' } }
       : undefined;
     price = {
-      final: { amount: { value: pf.amount ?? 0, currency: pf.currency ?? '' } },
+      final: { amount: { value: finalValue, currency: pf.currency ?? '' } },
       regular: regularAmount,
     };
   } else if (product.priceRange?.minimum?.final?.amount != null) {
@@ -113,17 +117,13 @@ export const enrichConfigurableProducts = async (items) => {
         });
         return item;
       }
-      let optionIds;
-      try {
-        optionIds = opts.map((o) => {
-          const optionUid = o.option_uid ?? o.configurable_product_option_uid;
-          const valueUid = o.value_uid ?? o.configurable_product_option_value_uid;
-          return btoa(`configurable/${atob(optionUid)}/${atob(valueUid)}`);
-        });
-      } catch (e) {
-        __diag.push({ sku, optionUidBuildError: String(e), opts });
-        return item;
-      }
+      // The selected value UID is already the Catalog Service option id
+      // (base64 of `configurable/<attr>/<value>`), so pass it through as-is.
+      // Re-wrapping it produced a bogus nested id, so refineProduct could not
+      // match the variant and returned the parent's price *range* instead.
+      const optionIds = opts
+        .map((o) => o.value_uid ?? o.configurable_product_option_value_uid)
+        .filter(Boolean);
       try {
         const configured = await pdpGetRefinedProduct(sku, optionIds);
         const shaped = configured ? ensureProductShape(configured) : null;
