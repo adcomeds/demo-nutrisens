@@ -102,9 +102,15 @@ export const enrichConfigurableProducts = async (items) => {
   const __diag = []; // TEMP DIAGNOSTIC
   const out = await Promise.all(
     items.map(async (item) => {
-      const { product, configurable_options: opts } = item;
-      if (!product?.sku || !opts?.length) {
-        __diag.push({ sku: product?.sku, opts: opts?.length ?? 0, skipped: true });
+      const { product, configurable_options: opts, sku: itemSku } = item;
+      // The requisition-list item carries the configurable parent sku at the item
+      // level (item.sku) — the drop-in keys everything off it. product.sku is not
+      // populated for configurable items, so reading it skipped enrichment entirely.
+      const sku = itemSku ?? product?.sku;
+      if (!sku || !opts?.length) {
+        __diag.push({
+          itemSku, productSku: product?.sku, opts: opts?.length ?? 0, skipped: true,
+        });
         return item;
       }
       let optionIds;
@@ -115,14 +121,15 @@ export const enrichConfigurableProducts = async (items) => {
           return btoa(`configurable/${atob(optionUid)}/${atob(valueUid)}`);
         });
       } catch (e) {
-        __diag.push({ sku: product.sku, optionUidBuildError: String(e), opts });
+        __diag.push({ sku, optionUidBuildError: String(e), opts });
         return item;
       }
       try {
-        const configured = await pdpGetRefinedProduct(product.sku, optionIds);
+        const configured = await pdpGetRefinedProduct(sku, optionIds);
         const shaped = configured ? ensureProductShape(configured) : null;
         __diag.push({
-          sku: product.sku,
+          sku,
+          rawOptions: opts,
           optionIds,
           gotConfigured: !!configured,
           configuredKeys: configured ? Object.keys(configured) : null,
@@ -138,7 +145,7 @@ export const enrichConfigurableProducts = async (items) => {
         // resolved variant the same way simple products are, or its price renders 0.
         return { ...item, configured_product: shaped };
       } catch (e) {
-        __diag.push({ sku: product.sku, refineError: String(e) });
+        __diag.push({ sku, refineError: String(e) });
         return item;
       }
     }),
