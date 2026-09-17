@@ -99,27 +99,59 @@ export const getProductData = async (skus) => {
  */
 export const enrichConfigurableProducts = async (items) => {
   if (!items?.length) return items;
-  return Promise.all(
+  const __diag = []; // TEMP DIAGNOSTIC
+  const out = await Promise.all(
     items.map(async (item) => {
       const { product, configurable_options: opts } = item;
-      if (!product?.sku || !opts?.length) return item;
-      const optionIds = opts.map((o) => {
-        const optionUid = o.option_uid ?? o.configurable_product_option_uid;
-        const valueUid = o.value_uid ?? o.configurable_product_option_value_uid;
-        return btoa(`configurable/${atob(optionUid)}/${atob(valueUid)}`);
-      });
+      if (!product?.sku || !opts?.length) {
+        __diag.push({ sku: product?.sku, opts: opts?.length ?? 0, skipped: true });
+        return item;
+      }
+      let optionIds;
+      try {
+        optionIds = opts.map((o) => {
+          const optionUid = o.option_uid ?? o.configurable_product_option_uid;
+          const valueUid = o.value_uid ?? o.configurable_product_option_value_uid;
+          return btoa(`configurable/${atob(optionUid)}/${atob(valueUid)}`);
+        });
+      } catch (e) {
+        __diag.push({ sku: product.sku, optionUidBuildError: String(e), opts });
+        return item;
+      }
       try {
         const configured = await pdpGetRefinedProduct(product.sku, optionIds);
+        const shaped = configured ? ensureProductShape(configured) : null;
+        __diag.push({
+          sku: product.sku,
+          optionIds,
+          gotConfigured: !!configured,
+          configuredKeys: configured ? Object.keys(configured) : null,
+          rawPrice: configured?.price ?? null,
+          rawPrices: configured?.prices ?? null,
+          rawPriceRange: configured?.priceRange ?? null,
+          shapedPrice: shaped?.price ?? null,
+          parentProductPrice: product?.price ?? null,
+        });
         if (!configured) return item;
         // getRefinedProduct returns price.{regular,final}.amount as a bare number,
         // but the requisition-list renderer reads amount.value. Normalize the
         // resolved variant the same way simple products are, or its price renders 0.
-        return { ...item, configured_product: ensureProductShape(configured) };
-      } catch {
+        return { ...item, configured_product: shaped };
+      } catch (e) {
+        __diag.push({ sku: product.sku, refineError: String(e) });
         return item;
       }
     }),
   );
+  // TEMP DIAGNOSTIC — render on page so it can be screenshotted
+  try {
+    window.__RL_ENRICH_DIAG = __diag;
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a0026;color:#fff;font:11px/1.4 monospace;padding:12px;white-space:pre-wrap;max-height:70vh;overflow:auto';
+    bar.textContent = `RL ENRICH DIAG (${__diag.length} items) — screenshot me:\n${JSON.stringify(__diag, null, 2)}`;
+    document.body.prepend(bar);
+  } catch (e) { /* ignore */ }
+  return out;
 };
 
 /**
